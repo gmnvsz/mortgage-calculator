@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .calculator-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .calculator-main, .calculator-adjustments {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .visualization-section {
+            grid-column: 1 / -1;
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .export-btn {
+            background: #28a745;
+        }
+        .payment-adjustments {
+            margin-top: 20px;
+        }
+        .adjustment-entry {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .adjustment-entry input {
+            width: 150px;
+        }
+        .remove-btn {
+            background: #dc3545;
+            padding: 5px 10px;
+        }
+        .section-title {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .results-table th, .results-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        .results-table th {
+            background: #f0f0f0;
+        }
+        .results-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .chart-container {
+            margin-top: 20px;
+            height: 400px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #ddd;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .tab.active {
+            background: #007bff;
+            color: white;
+        }
+        #monthlyBreakdown {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator-container">
+        <!-- Left Side - Main Calculator -->
+        <div class="calculator-main">
+            <h2>Basic Mortgage Details</h2>
+            <div class="input-group">
+                <label for="loanAmount">Loan Amount ($):</label>
+                <input type="number" id="loanAmount" value="200000">
+            </div>
+            <div class="input-group">
+                <label for="interestRate">Annual Interest Rate (%):</label>
+                <input type="number" id="interestRate" value="4.5" step="0.1">
+            </div>
+            <div class="input-group">
+                <label for="loanTerm">Loan Term (years):</label>
+                <input type="number" id="loanTerm" value="30">
+            </div>
+            <div class="input-group">
+                <label for="initialExtraPayment">Initial Monthly Extra Payment ($):</label>
+                <input type="number" id="initialExtraPayment" value="0">
+            </div>
+            <button onclick="calculateMortgage()">Calculate</button>
+            <button class="export-btn" onclick="exportResults()">Export Results</button>
+        </div>
+
+        <!-- Right Side - Payment Adjustments -->
+        <div class="calculator-adjustments">
+            <h2>Payment Adjustments</h2>
+            <div class="payment-adjustments">
+                <h3 class="section-title">Lump Sum Payments</h3>
+                <div id="lumpSumPayments"></div>
+                <button onclick="addLumpSumPayment()">Add Lump Sum Payment</button>
+
+                <h3 class="section-title">Extra Payment Changes</h3>
+                <div id="extraPaymentChanges"></div>
+                <button onclick="addExtraPaymentChange()">Add Extra Payment Change</button>
+            </div>
+        </div>
+
+        <!-- Bottom Section - Results and Visualization -->
+        <div class="visualization-section">
+            <div id="result"></div>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('chart')">Payment Schedule</button>
+                <button class="tab" onclick="showTab('breakdown')">Monthly Breakdown</button>
+            </div>
+            
+            <div id="chart" class="chart-container">
+                <canvas id="paymentChart"></canvas>
+            </div>
+            
+            <div id="monthlyBreakdown" style="display: none">
+                <table class="results-table" id="breakdownTable">
+					<thead>
+						<tr>
+							<th>Month</th>
+							<th>Payment</th>
+							<th>Extra Payment</th>
+							<th>Lump Sum</th>
+							<th>Principal</th>
+							<th>Interest</th>
+							<th>Balance</th>
+							<th>Original Balance</th>
+						</tr>
+					</thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let paymentChart = null;
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('chart').style.display = tabName === 'chart' ? 'block' : 'none';
+            document.getElementById('monthlyBreakdown').style.display = tabName === 'breakdown' ? 'block' : 'none';
+        }
+
+        function addLumpSumPayment() {
+            const container = document.getElementById('lumpSumPayments');
+            const div = document.createElement('div');
+            div.className = 'adjustment-entry';
+            div.innerHTML = `
+                <input type="number" placeholder="Amount ($)" class="lump-amount">
+                <input type="number" placeholder="After month #" class="lump-month">
+                <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function addExtraPaymentChange() {
+            const container = document.getElementById('extraPaymentChanges');
+            const div = document.createElement('div');
+            div.className = 'adjustment-entry';
+            div.innerHTML = `
+                <input type="number" placeholder="New amount ($)" class="extra-amount">
+                <input type="number" placeholder="Starting month #" class="extra-month">
+                <button class="remove-btn" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function createChart(monthlyData) {
+			if (paymentChart) {
+				paymentChart.destroy();
+			}
+
+			const ctx = document.getElementById('paymentChart').getContext('2d');
+			paymentChart = new Chart(ctx, {
+				type: 'line',
+				data: {
+					labels: monthlyData.map(d => `Month ${d.month}`),
+					datasets: [
+						{
+							label: 'Regular Payment',
+							data: monthlyData.map(d => d.payment),
+							borderColor: '#007bff',
+							fill: false
+						},
+						{
+							label: 'Actual Balance',
+							data: monthlyData.map(d => d.balance),
+							borderColor: '#dc3545',
+							fill: false
+						},
+						{
+							label: 'Original Balance',
+							data: monthlyData.map(d => d.originalBalance),
+							borderColor: '#ff8c00',
+							borderDash: [5, 5],
+							fill: false
+						},
+						{
+							label: 'Extra Payments',
+							data: monthlyData.map(d => d.extraPayment + d.lumpSum),
+							borderColor: '#28a745',
+							fill: false
+						}
+					]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					scales: {
+						y: {
+							beginAtZero: true,
+							ticks: {
+								callback: value => '$' + value.toLocaleString()
+							}
+						}
+					}
+				}
+			});
+		}
+
+
+				function updateMonthlyBreakdown(monthlyData) {
+			const tbody = document.querySelector('#breakdownTable tbody');
+			tbody.innerHTML = '';
+			
+			monthlyData.forEach(data => {
+				const row = document.createElement('tr');
+				row.innerHTML = `
+					<td>${data.month}</td>
+					<td>$${data.payment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.extraPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.lumpSum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.principal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.interest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+					<td>$${data.originalBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+				`;
+				tbody.appendChild(row);
+			});
+		}
+
+        function exportResults() {
+            const monthlyData = calculateMonthlyData();
+            let csv = 'Month,Payment,Extra Payment,Lump Sum,Principal,Interest,Balance\n';
+            
+            monthlyData.forEach(data => {
+                csv += `${data.month},${data.payment},${data.extraPayment},${data.lumpSum},${data.principal},${data.interest},${data.balance}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'mortgage_schedule.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function calculateMonthlyData() {
+			const loanAmount = parseFloat(document.getElementById('loanAmount').value);
+			const annualRate = parseFloat(document.getElementById('interestRate').value) / 100;
+			const monthlyRate = annualRate / 12;
+			const years = parseInt(document.getElementById('loanTerm').value);
+			const months = years * 12;
+			const initialExtraPayment = parseFloat(document.getElementById('initialExtraPayment').value) || 0;
+
+			const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+
+			const lumpSums = Array.from(document.querySelectorAll('#lumpSumPayments .adjustment-entry')).map(entry => ({
+				amount: parseFloat(entry.querySelector('.lump-amount').value) || 0,
+				month: parseInt(entry.querySelector('.lump-month').value) || 0
+			})).filter(payment => payment.amount > 0 && payment.month > 0)
+			.sort((a, b) => a.month - b.month);
+
+			const extraChanges = Array.from(document.querySelectorAll('#extraPaymentChanges .adjustment-entry')).map(entry => ({
+				amount: parseFloat(entry.querySelector('.extra-amount').value) || 0,
+				month: parseInt(entry.querySelector('.extra-month').value) || 0
+			})).filter(change => change.month > 0)
+			.sort((a, b) => a.month - b.month);
+
+			const monthlyData = [];
+			let balance = loanAmount;
+			let originalBalance = loanAmount;
+			let month = 1;
+
+			while (balance > 0 && month <= months) {
+				let currentExtraPayment = initialExtraPayment;
+				for (const change of extraChanges) {
+					if (month >= change.month) {
+						currentExtraPayment = change.amount;
+					}
+				}
+
+				const lumpSum = lumpSums.find(ls => ls.month === month)?.amount || 0;
+				const interest = balance * monthlyRate;
+				const principal = monthlyPayment - interest;
+				
+				// Calculate original balance (without extra payments)
+				const originalInterest = originalBalance * monthlyRate;
+				const originalPrincipal = monthlyPayment - originalInterest;
+				originalBalance = originalBalance - originalPrincipal;
+				if (originalBalance < 0) originalBalance = 0;
+				
+				// Calculate actual balance with extra payments
+				balance = balance - principal - currentExtraPayment - lumpSum;
+				if (balance < 0) balance = 0;
+
+				monthlyData.push({
+					month,
+					payment: monthlyPayment,
+					extraPayment: currentExtraPayment,
+					lumpSum,
+					principal,
+					interest,
+					balance,
+					originalBalance
+				});
+
+				month++;
+				if (balance <= 0) break;
+			}
+
+			return monthlyData;
+		}
+
+        function calculateMortgage() {
+			const monthlyData = calculateMonthlyData();
+			const finalMonth = monthlyData[monthlyData.length - 1];
+			
+			// Calculate original loan costs without extra payments
+			const loanAmount = parseFloat(document.getElementById('loanAmount').value);
+			const annualRate = parseFloat(document.getElementById('interestRate').value) / 100;
+			const monthlyRate = annualRate / 12;
+			const years = parseInt(document.getElementById('loanTerm').value);
+			const months = years * 12;
+			const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+			const totalOriginalInterest = (monthlyPayment * months) - loanAmount;
+			
+			// Calculate actual totals with extra payments
+			const totalInterest = monthlyData.reduce((sum, data) => sum + data.interest, 0);
+			const totalExtra = monthlyData.reduce((sum, data) => sum + data.extraPayment, 0);
+			const totalLumpSum = monthlyData.reduce((sum, data) => sum + data.lumpSum, 0);
+			
+			const formatter = new Intl.NumberFormat('en-US', {
+				style: 'currency',
+				currency: 'USD'
+			});
+
+			const yearsToPayoff = Math.floor(monthlyData.length / 12);
+			const monthsToPayoff = monthlyData.length % 12;
+			const timeSaved = months - monthlyData.length;
+			const yearsSaved = Math.floor(timeSaved / 12);
+			const monthsSaved = timeSaved % 12;
+
+			const result = `
+				<h3>Results Summary</h3>
+				<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+					<div>
+						<h4>Payment Details</h4>
+						<p>Regular Monthly Payment: ${formatter.format(monthlyData[0].payment)}</p>
+						<p>Initial Extra Monthly Payment: ${formatter.format(parseFloat(document.getElementById('initialExtraPayment').value) || 0)}</p>
+						<p>Total Extra Payments: ${formatter.format(totalExtra)}</p>
+						<p>Total Lump Sum Payments: ${formatter.format(totalLumpSum)}</p>
+					</div>
+					<div>
+						<h4>Loan Impact</h4>
+						<p>Original Total Interest: ${formatter.format(totalOriginalInterest)}</p>
+						<p>New Total Interest: ${formatter.format(totalInterest)}</p>
+						<p>Interest Savings: ${formatter.format(totalOriginalInterest - totalInterest)}</p>
+						<p>Total Interest Reduction: ${((totalOriginalInterest - totalInterest) / totalOriginalInterest * 100).toFixed(1)}%</p>
+					</div>
+					<div>
+						<h4>Time Impact</h4>
+						<p>Original Term: ${years} years</p>
+						<p>New Payoff Time: ${yearsToPayoff} years and ${monthsToPayoff} months</p>
+						<p>Time Saved: ${yearsSaved} years and ${monthsSaved} months</p>
+					</div>
+					<div>
+						<h4>Total Costs</h4>
+						<p>Original Total Cost: ${formatter.format(totalOriginalInterest + loanAmount)}</p>
+						<p>New Total Cost: ${formatter.format(totalInterest + loanAmount + totalExtra + totalLumpSum)}</p>
+						<p>Total Additional Payments: ${formatter.format(totalExtra + totalLumpSum)}</p>
+					</div>
+				</div>
+			`;
+
+			document.getElementById('result').innerHTML = result;
+			
+			// Update visualizations
+			createChart(monthlyData);
+			updateMonthlyBreakdown(monthlyData);
+		}
+		</script>
+	</body>
+</html>
